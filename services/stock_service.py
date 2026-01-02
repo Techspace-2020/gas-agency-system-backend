@@ -3,7 +3,6 @@ from sqlalchemy import text
 import logging
 
 from sqlalchemy.orm import Session
-from app.core.database import SessionLocal
 from app.core.exceptions import (
     DayAlreadyExistsException,
     PreviousDayNotClosedException,
@@ -120,17 +119,30 @@ class StockDayService:
         db.commit()
         
         # Fetch and return opening stock
+        # stocks = db.execute(text("""
+        #     SELECT 
+        #         ct.cylinder_type_id AS cylinder_type,
+        #         dss.opening_filled,
+        #         dss.opening_empty,
+        #         dss.defective_empty_vehicle,
+        #         dss.total_stock
+        #     FROM daily_stock_summary dss
+        #     JOIN cylinder_types ct ON dss.cylinder_type_id = ct.id
+        #     WHERE dss.stock_day_id = :stock_day_id
+        #     ORDER BY ct.display_order
+        # """), {"stock_day_id": curr_day.stock_day_id})
+
         stocks = db.execute(text("""
             SELECT 
-                ct.name AS cylinder_type,
+                ct.cylinder_type_id AS cylinder_type,
                 dss.opening_filled,
                 dss.opening_empty,
                 dss.defective_empty_vehicle,
                 dss.total_stock
             FROM daily_stock_summary dss
-            JOIN cylinder_types ct ON dss.cylinder_type_id = ct.id
+            JOIN cylinder_types ct ON dss.cylinder_type_id = ct.cylinder_type_id
             WHERE dss.stock_day_id = :stock_day_id
-            ORDER BY ct.display_order
+            ORDER BY ct.category;  
         """), {"stock_day_id": curr_day.stock_day_id})
         
         return {

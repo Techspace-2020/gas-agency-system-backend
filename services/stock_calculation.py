@@ -3,7 +3,6 @@ from sqlalchemy import text
 import logging
 
 from sqlalchemy.orm import Session
-from app.core.database import SessionLocal
 from app.core.exceptions import DayNotFoundException, NegativeStockException
 
 
@@ -83,31 +82,31 @@ class StockCalculationService:
         
         # Validate no negative stock
         negative_stock = db.execute(text("""
-            SELECT ct.name
-            FROM daily_stock_summary dss
-            JOIN cylinder_types ct ON dss.cylinder_type_id = ct.id
-            WHERE dss.stock_day_id = :day_id 
-            AND (dss.closing_filled < 0 OR dss.closing_empty < 0)
-        """), {"day_id": day.stock_day_id}).fetchall()
-        
+                SELECT ct.code
+                FROM daily_stock_summary dss
+                JOIN cylinder_types ct ON dss.cylinder_type_id = ct.cylinder_type_id
+                WHERE dss.stock_day_id = :day_id
+                AND (dss.closing_filled < 0 OR dss.closing_empty < 0)
+            """), {"day_id": day.stock_day_id}).fetchall()
+
         if negative_stock:
-            cylinders = ", ".join([row.name for row in negative_stock])
+            cylinders = ", ".join([row.code for row in negative_stock])
             raise NegativeStockException(cylinders)
         
         # Fetch result
         stocks = db.execute(text("""
-            SELECT
-                ct.name AS cylinder_type,
-                dss.opening_filled, dss.opening_empty,
-                dss.item_receipt, dss.item_return,
-                dss.sales_regular, dss.nc_qty, dss.dbc_qty,
-                dss.tv_out_qty, dss.closing_filled, dss.closing_empty,
-                dss.defective_empty_vehicle, dss.total_stock
-            FROM daily_stock_summary dss
-            JOIN cylinder_types ct ON dss.cylinder_type_id = ct.id
-            WHERE dss.stock_day_id = :day_id
-            ORDER BY ct.display_order
-        """), {"day_id": day.stock_day_id})
+                SELECT
+                    ct.code AS cylinder_type,
+                    dss.opening_filled, dss.opening_empty,
+                    dss.item_receipt, dss.item_return,
+                    dss.sales_regular, dss.nc_qty, dss.dbc_qty,
+                    dss.tv_out_qty, dss.closing_filled, dss.closing_empty,
+                    dss.defective_empty_vehicle, dss.total_stock
+                FROM daily_stock_summary dss
+                JOIN cylinder_types ct ON dss.cylinder_type_id = ct.cylinder_type_id
+                WHERE dss.stock_day_id = :day_id
+                ORDER BY ct.cylinder_type_id
+            """), {"day_id": day.stock_day_id})
         
         return {
             "stock_date": stock_date,

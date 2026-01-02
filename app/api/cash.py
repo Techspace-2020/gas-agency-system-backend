@@ -45,9 +45,7 @@ async def calculate_expected_cash(
     "/api/v1/stock-days/cash-deposits",
     response_model=BaseResponse,
     tags=["Step 6 - Cash Deposits"],)
-async def record_cash_deposits(
-    request: RecordCashDepositsRequest,
-    db: Session = Depends(get_db)):
+async def record_cash_deposits(request: RecordCashDepositsRequest, db: Session = Depends(get_db)):
     """
     **STEP 6: Record Cash Deposits**
     
@@ -67,9 +65,7 @@ async def record_cash_deposits(
     "/api/v1/stock-days/{stock_date}/update-balances",
     response_model=BaseResponse,
     tags=["Step 7 - Cash Balance Update"],)
-async def update_delivery_boy_balances(
-    stock_date: date,
-    db: Session = Depends(get_db)):
+async def update_delivery_boy_balances(stock_date: date, db: Session = Depends(get_db)):
     """
     **STEP 7: Update Delivery Boy Cash Balances**
     

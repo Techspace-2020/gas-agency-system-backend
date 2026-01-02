@@ -1,12 +1,13 @@
-from app.core.database import SessionLocal
 from decimal import Decimal
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 
 
 class OfficeService:
     """Handles office-related validations"""
     
     @staticmethod
-    def get_pending_office_stock(db: SessionLocal) -> dict:
+    def get_pending_office_stock(db: Session) -> dict:
         """
         Get pending office stock and expected amount
         """

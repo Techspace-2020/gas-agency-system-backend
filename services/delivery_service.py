@@ -4,7 +4,6 @@ from sqlalchemy import text
 import logging
 
 from sqlalchemy.orm import Session
-from app.core.database import SessionLocal
 from app.core.exceptions import (
     DayNotFoundException,
     DayNotOpenException,
@@ -29,26 +28,43 @@ class DeliveryService:
         day = DeliveryService._get_open_day(db, stock_date)
         
         for movement in movements:
-            # Validate cylinder type
+            # Validate cylinder type (use `id` column)
             cylinder = db.execute(
-                text("SELECT id FROM cylinder_types WHERE name = :name AND is_active = TRUE"),
+                text("SELECT cylinder_type_id FROM cylinder_types WHERE code = :name AND is_active = TRUE"),
                 {"name": movement.cylinder_type}
             ).fetchone()
-            
+
             if not cylinder:
                 raise InvalidStockDataException(f"Invalid cylinder type: {movement.cylinder_type}")
-            
-            # Update IOCL movement
-            db.execute(text("""
+
+            # Update IOCL movement; if no row exists for this day/type, insert it
+            result = db.execute(text("""
                 UPDATE daily_stock_summary 
                 SET item_receipt = :received, item_return = :returned
                 WHERE stock_day_id = :day_id AND cylinder_type_id = :cylinder_id
             """), {
                 "day_id": day.stock_day_id,
-                "cylinder_id": cylinder.id,
+                "cylinder_id": cylinder.cylinder_type_id,
                 "received": movement.received,
-                "returned": movement.returned
+                "returned": movement.returned,
             })
+
+            # If update didn't affect any rows it likely means the `daily_stock_summary` row
+            # for this stock_day / cylinder_type doesn't exist yet — create it.
+            if result.rowcount == 0:
+                db.execute(text("""
+                    INSERT INTO daily_stock_summary
+                    (stock_day_id, cylinder_type_id, item_receipt, item_return)
+                    VALUES (:day_id, :cylinder_id, :received, :returned)
+                    ON DUPLICATE KEY UPDATE
+                        item_receipt = VALUES(item_receipt),
+                        item_return = VALUES(item_return)
+                """), {
+                    "day_id": day.stock_day_id,
+                    "cylinder_id": cylinder.cylinder_type_id,
+                    "received": movement.received,
+                    "returned": movement.returned,
+                })
         
         db.commit()
         logger.info(f"Updated IOCL movements for {stock_date}")
@@ -67,7 +83,7 @@ class DeliveryService:
         for sale in sales:
             # Get delivery boy
             delivery_boy = db.execute(
-                text("SELECT id FROM delivery_boys WHERE name = :name AND is_active = TRUE"),
+                text("SELECT delivery_boy_id FROM delivery_boys WHERE name = :name AND is_active = TRUE"),
                 {"name": sale.delivery_boy_name}
             ).fetchone()
             
@@ -76,7 +92,7 @@ class DeliveryService:
             
             # Get cylinder type
             cylinder = db.execute(
-                text("SELECT id FROM cylinder_types WHERE name = :name AND is_active = TRUE"),
+                text("SELECT cylinder_type_id FROM cylinder_types WHERE code = :name AND is_active = TRUE"),
                 {"name": sale.cylinder_type}
             ).fetchone()
             
@@ -94,8 +110,8 @@ class DeliveryService:
                     dbc_qty = :dbc
             """), {
                 "day_id": day.stock_day_id,
-                "boy_id": delivery_boy.id,
-                "cylinder_id": cylinder.id,
+                "boy_id": delivery_boy.delivery_boy_id,
+                "cylinder_id": cylinder.cylinder_type_id,
                 "regular": sale.regular_qty,
                 "nc": sale.nc_qty,
                 "dbc": sale.dbc_qty
@@ -116,7 +132,7 @@ class DeliveryService:
         
         # Get office "delivery boy"
         office = db.execute(
-            text("SELECT id FROM delivery_boys WHERE name = 'Office'"),
+            text("SELECT delivery_boy_id FROM delivery_boys WHERE name = 'Office'"),
         ).fetchone()
         
         if not office:
@@ -124,7 +140,7 @@ class DeliveryService:
         
         for sale in sales:
             cylinder = db.execute(
-                text("SELECT id FROM cylinder_types WHERE name = :name"),
+                text("SELECT cylinder_type_id FROM cylinder_types WHERE code = :name"),
                 {"name": sale.cylinder_type}
             ).fetchone()
             
@@ -143,8 +159,8 @@ class DeliveryService:
                     delivery_source = 'OFFICE'
             """), {
                 "day_id": day.stock_day_id,
-                "boy_id": office.id,
-                "cylinder_id": cylinder.id,
+                "boy_id": office.delivery_boy_id,
+                "cylinder_id": cylinder.cylinder_type_id,
                 "regular": sale.regular_qty,
                 "nc": sale.nc_qty,
                 "dbc": sale.dbc_qty
@@ -163,7 +179,7 @@ class DeliveryService:
         for entry in tv_out_entries:
             # Validate cylinder
             cylinder = db.execute(
-                text("SELECT id FROM cylinder_types WHERE name = :name"),
+                text("SELECT cylinder_type_id FROM cylinder_types WHERE code = :name"),
                 {"name": entry.cylinder_type}
             ).fetchone()
             
@@ -177,14 +193,14 @@ class DeliveryService:
                 WHERE stock_day_id = :day_id AND cylinder_type_id = :cylinder_id
             """), {
                 "day_id": day.stock_day_id,
-                "cylinder_id": cylinder.id,
+                "cylinder_id": cylinder.cylinder_type_id,
                 "qty": entry.quantity
             })
             
             # Optional: Track delivery boy for audit
             if entry.delivery_boy_name:
                 delivery_boy = db.execute(
-                    text("SELECT id FROM delivery_boys WHERE name = :name"),
+                    text("SELECT delivery_boy_id FROM delivery_boys WHERE name = :name"),
                     {"name": entry.delivery_boy_name}
                 ).fetchone()
                 
@@ -196,8 +212,8 @@ class DeliveryService:
                         ON DUPLICATE KEY UPDATE empty_qty = empty_qty + :qty
                     """), {
                         "day_id": day.stock_day_id,
-                        "boy_id": delivery_boy.id,
-                        "cylinder_id": cylinder.id,
+                        "boy_id": delivery_boy.delivery_boy_id,
+                        "cylinder_id": cylinder.cylinder_type_id,
                         "qty": entry.quantity
                     })
         

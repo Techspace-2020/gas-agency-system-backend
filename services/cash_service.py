@@ -5,7 +5,6 @@ from sqlalchemy import text
 import logging
 
 from sqlalchemy.orm import Session
-from app.core.database import SessionLocal
 from app.core.exceptions import DayNotFoundException, DeliveryBoyNotFoundException
 from app.models.schema import CashDeposit
 
@@ -72,7 +71,7 @@ class CashService:
                         )
                     ) AS dbc_amount
                 FROM delivery_issues di
-                JOIN cylinder_types ct ON di.cylinder_type_id = ct.id
+                JOIN cylinder_types ct ON di.cylinder_type_id = ct.cylinder_type_id
                 JOIN price_nc_components pnc ON di.cylinder_type_id = pnc.cylinder_type_id
                 WHERE di.stock_day_id = :day_id
                 AND di.delivery_source != 'OFFICE'
@@ -82,14 +81,14 @@ class CashService:
             (
                 SELECT
                     dss.stock_day_id,
-                    db.id AS delivery_boy_id,
+                    db.delivery_boy_id AS delivery_boy_id,
                     SUM(dss.tv_out_qty * pnc.deposit_amount) AS tv_out_refund_amount
                 FROM daily_stock_summary dss
                 JOIN price_nc_components pnc ON dss.cylinder_type_id = pnc.cylinder_type_id
                 JOIN delivery_boys db ON db.is_active = TRUE
                 WHERE dss.stock_day_id = :day_id
                 AND dss.tv_out_qty > 0
-                GROUP BY db.id
+                GROUP BY delivery_boy_id
             ) t ON s.stock_day_id = t.stock_day_id
                 AND s.delivery_boy_id = t.delivery_boy_id
             ON DUPLICATE KEY UPDATE
@@ -104,7 +103,7 @@ class CashService:
                 db.name AS delivery_boy_name,
                 dea.expected_amount
             FROM delivery_expected_amount dea
-            JOIN delivery_boys db ON dea.delivery_boy_id = db.id
+            JOIN delivery_boys db ON dea.delivery_boy_id = db.delivery_boy_id
             WHERE dea.stock_day_id = :day_id
             ORDER BY db.name
         """), {"day_id": day.stock_day_id})
@@ -134,7 +133,7 @@ class CashService:
         for deposit in deposits:
             # Get delivery boy
             delivery_boy = db.execute(
-                text("SELECT id FROM delivery_boys WHERE name = :name"),
+                text("SELECT delivery_boy_id FROM delivery_boys WHERE name = :name"),
                 {"name": deposit.delivery_boy_name}
             ).fetchone()
             
@@ -152,7 +151,7 @@ class CashService:
                     total_deposited = :cash + :upi
             """), {
                 "day_id": day.stock_day_id,
-                "boy_id": delivery_boy.id,
+                "boy_id": delivery_boy.delivery_boy_id,
                 "cash": deposit.cash_amount,
                 "upi": deposit.upi_amount
             })
