@@ -40,9 +40,9 @@ class TokenResponse(BaseModel):
 
 class UserCreate(BaseModel):
     username: str = Field(..., min_length=3, max_length=50)
-    password: str = Field(..., min_length=6)
-    full_name: str
+    full_name: Optional[str] = None
     email: Optional[EmailStr] = None
+    password: str = Field(..., min_length=8)
     mobile: Optional[str] = Field(None, pattern=r"^\d{10,15}$")
     role: UserRole
 

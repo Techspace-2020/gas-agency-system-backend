@@ -1,5 +1,4 @@
 from sqlalchemy.orm import Session
-
 from app.core.database import get_db 
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi import FastAPI, Depends, HTTPException, status, Request
@@ -11,12 +10,13 @@ from sqlalchemy import text
 import logging
 from datetime import date, timedelta
 from typing import List, Optional
+from services.auth_service import(register_admin_service,register_employee_service,employee_login_service,admin_login_service)
 
 from fastapi.middleware.cors import CORSMiddleware
 #Base.metadata.create_all(bind=engine)
 
 from app.core.database import engine, get_db
-from app.models import schema
+from app.models.schema import(BaseModel,BaseResponse,UserCreate,LoginRequest)
 from app.core.config import settings
 from app.core.exceptions import BusinessException
 
@@ -120,34 +120,34 @@ def db_test(db: Session = Depends(get_db)):
     return {"message": "Database connected successfully"}
 
 # ---------------- ADMIN REGISTER ----------------
-"""@app.post("/auth/admin/register")
-def register_admin(
-    data: schemas.AdminRegister,
-    db: Session = Depends(get_db)
-):
-    return register_admin_service(data, db)
+@app.post("/auth/admin/register",
+          response_model=BaseModel,
+          tags=["Step - Admin Authentication"],)
+def register_admin(data: UserCreate, db: Session = Depends(get_db)):
+    result = register_admin_service(data, db)
+    return BaseResponse(success=True, message="Admin registered successfully", data=result)
+
+# ---------------- ADMIN LOGIN ----------------
+@app.post("/auth/admin/login",
+          response_model=BaseModel,
+          tags=["Step - Admin Authentication"],)
+def admin_login(data: LoginRequest, db: Session = Depends(get_db)):
+    result = admin_login_service(data, db)
+    return BaseResponse(success=True, message="Admin logged in successfully", data=result)
 
 # ---------------- EMPLOYEE REGISTER ----------------
-@app.post("/auth/employee/register")
-def register_employee(
-    data: schemas.EmployeeRegister,
-    db: Session = Depends(get_db)
-):
-    return register_employee_service(data, db)
+@app.post("/auth/employee/register",
+          response_model=BaseModel,
+          tags=["Step - Employee Authentication"],)
+def register_employee(data: UserCreate, db: Session = Depends(get_db)):
+    result = register_employee_service(data, db)
+    return BaseResponse(success=True, message="Employee registered successfully", data=result)
 
-# ----------------EMPLOYEE LOGIN ----------------
-@app.post("/auth/employee/login", response_model=schemas.Token)
-def login(
-    data: schemas.LoginRequest,
-    db: Session = Depends(get_db)
-):
-    return employee_login_service(data, db)"""
 
-# ----------------ADMIN LOGIN ----------------
-"""@app.post("/auth/admin/login", response_model=schemas.Token)
-def login(
-    data: schemas.LoginRequest,
-    db: Session = Depends(get_db)
-):
-    return admin_login_service(data, db)"""
-
+# ---------------- EMPLOYEE LOGIN ----------------
+@app.post("/auth/employee/login",
+          response_model=BaseModel,
+          tags=["Step - Employee Authentication"],)
+def employee_login(data: LoginRequest, db: Session = Depends(get_db)):
+    result = employee_login_service(data, db)
+    return BaseResponse(success=True, message="Employee logged in successfully", data=result)
