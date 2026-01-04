@@ -16,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 #Base.metadata.create_all(bind=engine)
 
 from app.core.database import engine, get_db
-from app.models.schema import(BaseModel,BaseResponse,UserCreate,LoginRequest)
+from app.models.schema import (BaseResponse, UserCreate, LoginRequest)
 from app.core.config import settings
 from app.core.exceptions import BusinessException
 
@@ -121,33 +121,33 @@ def db_test(db: Session = Depends(get_db)):
 
 # ---------------- ADMIN REGISTER ----------------
 @app.post("/auth/admin/register",
-          response_model=BaseModel,
+          response_model=BaseResponse,
           tags=["Step - Admin Authentication"],)
 def register_admin(data: UserCreate, db: Session = Depends(get_db)):
     result = register_admin_service(data, db)
-    return BaseResponse(success=True, message="Admin registered successfully", data=result)
+    return BaseResponse(success=True, message=f"Admin registered successfully with name {data.username}!!")
 
 # ---------------- ADMIN LOGIN ----------------
 @app.post("/auth/admin/login",
-          response_model=BaseModel,
+          response_model=BaseResponse,
           tags=["Step - Admin Authentication"],)
 def admin_login(data: LoginRequest, db: Session = Depends(get_db)):
     result = admin_login_service(data, db)
-    return BaseResponse(success=True, message="Admin logged in successfully", data=result)
+    return BaseResponse(success=True, message="Admin logged in successfully!!")
 
 # ---------------- EMPLOYEE REGISTER ----------------
 @app.post("/auth/employee/register",
-          response_model=BaseModel,
+          response_model=BaseResponse,
           tags=["Step - Employee Authentication"],)
 def register_employee(data: UserCreate, db: Session = Depends(get_db)):
     result = register_employee_service(data, db)
-    return BaseResponse(success=True, message="Employee registered successfully", data=result)
+    return BaseResponse(success=True, message=f"Employee registered successfully with name {data.username}!!")
 
 
 # ---------------- EMPLOYEE LOGIN ----------------
 @app.post("/auth/employee/login",
-          response_model=BaseModel,
+          response_model=BaseResponse,
           tags=["Step - Employee Authentication"],)
 def employee_login(data: LoginRequest, db: Session = Depends(get_db)):
     result = employee_login_service(data, db)
-    return BaseResponse(success=True, message="Employee logged in successfully", data=result)
+    return BaseResponse(success=True, message="Employee logged in successfully!!")

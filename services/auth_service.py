@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 import logging
 from app.models.schema import(UserCreate, LoginRequest, TokenResponse)
-from app.core.security import pwd_context, create_access_token, create_refresh_token
+from app.core.security import get_password_hash, verify_password, create_access_token, create_refresh_token
 from app.core.exceptions import BusinessException
 
 logger = logging.getLogger(__name__)
@@ -15,12 +15,12 @@ def _get_user_by_username(db: Session, username: str):
     ).fetchone()
 
 
-def register_admin_service(data: UserCreate, db: Session):
+def register_admin_service(data: UserCreate, db: Session)-> dict:
     existing = _get_user_by_username(db, data.username)
     if existing:
         raise BusinessException("Username already exists", 409)
 
-    password_hash = pwd_context.hash(data.password)
+    password_hash = get_password_hash(data.password)
     role = "ADMIN"
 
     db.execute(
@@ -29,7 +29,7 @@ def register_admin_service(data: UserCreate, db: Session):
             "username": data.username,
             "password_hash": password_hash,
             "role": role,
-            "is_active": 1,
+            "is_active": 0,
         },
     )
     db.commit()
@@ -47,9 +47,10 @@ def register_employee_service(data: UserCreate, db: Session):
     if existing:
         raise BusinessException("Username already exists", 409)
 
-    password_hash = pwd_context.hash(data.password)
+    password_hash = get_password_hash(data.password)
     # Use provided role if given, otherwise default to OPERATOR
-    role = data.role.value if hasattr(data.role, "value") else str(data.role)
+    #role = data.role.value if hasattr(data.role, "value") else str(data.role)
+    role = "OFFICE"
 
     db.execute(
         text("INSERT INTO users (username, password_hash, role, is_active) VALUES (:username, :password_hash, :role, :is_active)"),
@@ -57,7 +58,7 @@ def register_employee_service(data: UserCreate, db: Session):
             "username": data.username,
             "password_hash": password_hash,
             "role": role,
-            "is_active": 1,
+            "is_active": 0,
         },
     )
     db.commit()
@@ -92,7 +93,7 @@ def employee_login_service(data: LoginRequest, db: Session):
         raise BusinessException("Invalid credentials", 401)
 
     password_hash = user["password_hash"]
-    if not pwd_context.verify(data.password, password_hash):
+    if not verify_password(data.password, password_hash):
         raise BusinessException("Invalid credentials", 401)
 
     return _generate_tokens_for_user(user._mapping)
@@ -106,9 +107,10 @@ def admin_login_service(data:LoginRequest, db: Session):
 
     if not user:
         raise BusinessException("Invalid credentials", 401)
+        
 
     password_hash = user["password_hash"]
-    if not pwd_context.verify(data.password, password_hash):
+    if not verify_password(data.password, password_hash):
         raise BusinessException("Invalid credentials", 401)
 
     # ensure role is ADMIN

@@ -44,7 +44,6 @@ class UserCreate(BaseModel):
     email: Optional[EmailStr] = None
     password: str = Field(..., min_length=8)
     mobile: Optional[str] = Field(None, pattern=r"^\d{10,15}$")
-    role: UserRole
 
 class BaseResponse(BaseModel):
     success: bool

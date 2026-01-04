@@ -216,6 +216,8 @@ class DeliveryService:
                         "cylinder_id": cylinder.cylinder_type_id,
                         "qty": entry.quantity
                     })
+                else:
+                    raise DeliveryBoyNotFoundException(entry.delivery_boy_name)
         
         db.commit()
         return {"stock_date": stock_date, "tv_out_entries_recorded": len(tv_out_entries)}

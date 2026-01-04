@@ -9,22 +9,44 @@ from app.core.database import get_db
 import jwt
 import bcrypt
 
+# Use passlib CryptContext for bcrypt
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login")
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-def hash_password(password: str) -> str:
-    bytes = password.encode("utf-8")
-    salt = bcrypt.gensalt()
-    return bcrypt.hashpw(bytes,salt)
+def _normalize_password_for_bcrypt(password: str) -> str:
+    """Truncate password to 72 bytes (bcrypt limit) safely on UTF-8 boundary."""
+    if password is None:
+        return password
+    b = password.encode("utf-8")
+    if len(b) <= 72:
+        return password
+    trunc = b[:72]
+    return trunc.decode("utf-8", errors="ignore")
 
-def verify_password(password: str, hashed: str) -> bool:
-    userBytes = password.encode("utf-8")
-    return bcrypt.checkpw(userBytes,hashed)
 
 def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+    # Use bcrypt directly and ensure password bytes are truncated to 72 bytes
+    if password is None:
+        return None
+    b = password.encode("utf-8")
+    if len(b) > 72:
+        b = b[:72]
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(b, salt)
+    return hashed.decode("utf-8")
+
+def verify_password(password: str, hashed: str) -> bool:
+    if password is None or hashed is None:
+        return False
+    b = password.encode("utf-8")
+    if len(b) > 72:
+        b = b[:72]
+    try:
+        return bcrypt.checkpw(b, hashed.encode("utf-8"))
+    except ValueError:
+        return False
+
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     to_encode = data.copy()
