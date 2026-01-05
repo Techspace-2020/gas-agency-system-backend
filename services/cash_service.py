@@ -80,15 +80,15 @@ class CashService:
             LEFT JOIN
             (
                 SELECT
-                    dss.stock_day_id,
-                    db.delivery_boy_id AS delivery_boy_id,
-                    SUM(dss.tv_out_qty * pnc.deposit_amount) AS tv_out_refund_amount
-                FROM daily_stock_summary dss
-                JOIN price_nc_components pnc ON dss.cylinder_type_id = pnc.cylinder_type_id
-                JOIN delivery_boys db ON db.is_active = TRUE
-                WHERE dss.stock_day_id = :day_id
-                AND dss.tv_out_qty > 0
-                GROUP BY delivery_boy_id
+                    dve.stock_day_id,
+                    dve.delivery_boy_id AS delivery_boy_id,
+                    SUM(dve.empty_qty * pnc.deposit_amount) AS tv_out_refund_amount
+                FROM delivery_vehicle_empty_stock dve
+                JOIN price_nc_components pnc ON dve.cylinder_type_id = pnc.cylinder_type_id
+                JOIN delivery_boys db ON db.delivery_boy_id = dve.delivery_boy_id AND db.is_active = TRUE
+                WHERE dve.stock_day_id = :day_id
+                AND dve.empty_qty > 0
+                GROUP BY dve.delivery_boy_id
             ) t ON s.stock_day_id = t.stock_day_id
                 AND s.delivery_boy_id = t.delivery_boy_id
             ON DUPLICATE KEY UPDATE
@@ -140,42 +140,61 @@ class CashService:
             if not delivery_boy:
                 raise DeliveryBoyNotFoundException(deposit.delivery_boy_name)
             
-            # Insert deposit
-            db.execute(text("""
-                INSERT INTO delivery_cash_deposit
-                (stock_day_id, delivery_boy_id, cash_amount, upi_amount)
-                VALUES (:day_id, :boy_id, :cash, :upi)
-                ON DUPLICATE KEY UPDATE
-                    cash_amount = :cash,
-                    upi_amount = :upi,
-                    total_deposited = :cash + :upi
-            """), {
-                "day_id": day.stock_day_id,
-                "boy_id": delivery_boy.delivery_boy_id,
-                "cash": deposit.cash_amount,
-                "upi": deposit.upi_amount
-            })
+            # Calculate total
+            total = (deposit.cash_amount or 0) + (deposit.upi_amount or 0)
+
+            # If a row exists for this stock_day and delivery_boy, update it; otherwise insert
+            exists = db.execute(
+                text("SELECT 1 FROM delivery_cash_deposit WHERE stock_day_id = :day_id AND delivery_boy_id = :boy_id"),
+                {"day_id": day.stock_day_id, "boy_id": delivery_boy.delivery_boy_id}
+            ).fetchone()
+
+            if exists:
+                db.execute(text("""
+                    UPDATE delivery_cash_deposit
+                    SET cash_amount = :cash, upi_amount = :upi, total_deposited = :total
+                    WHERE stock_day_id = :day_id AND delivery_boy_id = :boy_id
+                """), {
+                    "day_id": day.stock_day_id,
+                    "boy_id": delivery_boy.delivery_boy_id,
+                    "cash": deposit.cash_amount,
+                    "upi": deposit.upi_amount,
+                    "total": total
+                })
+            else:
+                db.execute(text("""
+                    INSERT INTO delivery_cash_deposit
+                    (stock_day_id, delivery_boy_id, cash_amount, upi_amount, total_deposited)
+                    VALUES (:day_id, :boy_id, :cash, :upi, :total)
+                """), {
+                    "day_id": day.stock_day_id,
+                    "boy_id": delivery_boy.delivery_boy_id,
+                    "cash": deposit.cash_amount,
+                    "upi": deposit.upi_amount,
+                    "total": total
+                })
         
         db.commit()
         
-        # Fetch summary with variance
+        # Fetch summary with variance (group by delivery_boy to avoid duplicate rows)
         summary = db.execute(text("""
             SELECT
                 db.name AS delivery_boy_name,
-                dcd.cash_amount,
-                dcd.upi_amount,
-                dcd.total_deposited,
-                IFNULL(dea.expected_amount, 0) AS expected_amount,
-                (dcd.total_deposited - IFNULL(dea.expected_amount, 0)) AS variance
+                SUM(dcd.cash_amount) AS cash_amount,
+                SUM(dcd.upi_amount) AS upi_amount,
+                SUM(dcd.total_deposited) AS total_deposited,
+                IFNULL(MAX(dea.expected_amount), 0) AS expected_amount,
+                (SUM(dea.expected_amount) - IFNULL(MAX(dcd.total_deposited), 0)) AS variance
             FROM delivery_cash_deposit dcd
-            JOIN delivery_boys db ON dcd.delivery_boy_id = db.id
+            JOIN delivery_boys db ON dcd.delivery_boy_id = db.delivery_boy_id
             LEFT JOIN delivery_expected_amount dea 
                 ON dea.delivery_boy_id = dcd.delivery_boy_id
                 AND dea.stock_day_id = dcd.stock_day_id
             WHERE dcd.stock_day_id = :day_id
+            GROUP BY dcd.delivery_boy_id, db.name
             ORDER BY db.name
         """), {"day_id": day.stock_day_id})
-        
+
         deposit_list = [dict(row._mapping) for row in summary]
         
         totals = db.execute(text("""
@@ -209,9 +228,19 @@ class CashService:
             raise DayNotFoundException(str(stock_date))
         
         # Step 7.1: Freeze opening balance
+        # Ensure a row exists for every active delivery boy
+        db.execute(text("""
+            INSERT INTO delivery_cash_balance (delivery_boy_id, opening_balance, today_expected, today_deposited, closing_balance, balance_status)
+            SELECT db.delivery_boy_id, 0, 0, 0, 0, 'SETTLED'
+            FROM delivery_boys db
+            WHERE db.is_active = TRUE
+            AND db.delivery_boy_id NOT IN (SELECT delivery_boy_id FROM delivery_cash_balance)
+        """))
+
+        # Freeze opening balance
         db.execute(text("""
             UPDATE delivery_cash_balance
-            SET opening_balance = closing_balance
+            SET opening_balance = IFNULL(closing_balance, 0)
         """))
         
         # Step 7.2: Update today's expected
@@ -268,7 +297,7 @@ class CashService:
                 dcb.closing_balance,
                 dcb.balance_status
             FROM delivery_cash_balance dcb
-            JOIN delivery_boys db ON dcb.delivery_boy_id = db.id
+            JOIN delivery_boys db ON dcb.delivery_boy_id = db.delivery_boy_id
             ORDER BY db.name
         """))
         

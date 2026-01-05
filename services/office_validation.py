@@ -13,7 +13,7 @@ class OfficeService:
         """
         stocks = db.execute(text("""
             SELECT
-                ct.name AS cylinder_type,
+                ct.code AS cylinder_type,
                 SUM(di.regular_qty + di.nc_qty + di.dbc_qty) AS pending_qty,
                 SUM(
                     di.regular_qty * pnc.refill_amount
@@ -37,11 +37,11 @@ class OfficeService:
                     )
                 ) AS expected_amount
             FROM delivery_issues di
-            JOIN cylinder_types ct ON di.cylinder_type_id = ct.id
+            JOIN cylinder_types ct ON di.cylinder_type_id = ct.cylinder_type_id
             JOIN price_nc_components pnc ON di.cylinder_type_id = pnc.cylinder_type_id
             WHERE di.delivery_source = 'OFFICE'
-            GROUP BY ct.name
-            ORDER BY ct.display_order
+            GROUP BY ct.code
+            ORDER BY ct.code
         """))
         
         stock_list = [dict(row._mapping) for row in stocks]

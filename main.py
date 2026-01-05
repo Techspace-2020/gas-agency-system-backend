@@ -13,7 +13,6 @@ from typing import List, Optional
 from services.auth_service import(register_admin_service,register_employee_service,employee_login_service,admin_login_service)
 
 from fastapi.middleware.cors import CORSMiddleware
-#Base.metadata.create_all(bind=engine)
 
 from app.core.database import engine, get_db
 from app.models.schema import (BaseResponse, UserCreate, LoginRequest)
@@ -24,12 +23,6 @@ from app.core.exceptions import BusinessException
 from app.api.stock_days import router as stock_days_router
 from app.api.cash import router as cash_router
 from app.api.office import router as office_router
-from app.core.security import get_current_user,require_role
-# from app.api.auth import (
-#     register_admin_service,
-#     register_employee_service,
-#     employee_login_service,admin_login_service
-# )
 
 # Configure logging
 logging.basicConfig(
@@ -112,12 +105,12 @@ async def global_exception_handler(request: Request, exc: Exception):
 # ---------------- HEALTH CHECK ----------------
 @app.get("/")
 def health_check():
-    return {"status": "Gas Agency API is running"}
+    return {"status": "Gas Agency API is running!!"}
 
 # ---------------- DATABASE CHECK ----------------
 @app.get("/db-test")
 def db_test(db: Session = Depends(get_db)):
-    return {"message": "Database connected successfully"}
+    return {"message": "Database connected successfully!!"}
 
 # ---------------- ADMIN REGISTER ----------------
 @app.post("/auth/admin/register",
@@ -125,7 +118,7 @@ def db_test(db: Session = Depends(get_db)):
           tags=["Step - Admin Authentication"],)
 def register_admin(data: UserCreate, db: Session = Depends(get_db)):
     result = register_admin_service(data, db)
-    return BaseResponse(success=True, message=f"Admin registered successfully with name {data.username}!!")
+    return BaseResponse(success=True, message=f"Admin registered successfully with name {data.username}")
 
 # ---------------- ADMIN LOGIN ----------------
 @app.post("/auth/admin/login",
@@ -141,7 +134,7 @@ def admin_login(data: LoginRequest, db: Session = Depends(get_db)):
           tags=["Step - Employee Authentication"],)
 def register_employee(data: UserCreate, db: Session = Depends(get_db)):
     result = register_employee_service(data, db)
-    return BaseResponse(success=True, message=f"Employee registered successfully with name {data.username}!!")
+    return BaseResponse(success=True, message=f"Employee registered successfully with name {data.username}")
 
 
 # ---------------- EMPLOYEE LOGIN ----------------
